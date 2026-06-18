@@ -2199,7 +2199,7 @@ const speciesCatalog = [
         ? careAdvice.alerts.map((alert) => `
             <div class="alert-box alert-${alert.level}">${alert.text}</div>
           `).join("")
-        : `<div class="alert-box alert-safe">${careAdvice.safeMessage}</div>`;
+        : "";
       const eggReminders = getEggReminders();
       const eggReminderHtml = eggReminders.length
         ? `<div class="egg-reminder-card"><strong>产蛋提醒</strong>${eggReminders.map((item) => `<div>${item}</div>`).join("")}</div>`
