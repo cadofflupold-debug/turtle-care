@@ -13,26 +13,25 @@ export default async function handler(req, res) {
   // ===== CORS 头 =====
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,X-Session-Token,x-session-token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,X-Session-Token,x-session-token,X-Bmob-Session-Token");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   try {
-    // Vercel 会在 req.query 中传入路径参数
-    // vercel.json 中配置了 rewrite: /api/bmob/(.*) → /api/bmob?path=$1
-    // 所以 req.query.path 包含原始路径的剩余部分
+    // ===== 提取要转发的 Bmob API 路径 =====
+    // vercel.json rewrite: /api/bmob/:path* → /api/bmob?path=:path*
+    // 所以 req.query.path 包含原始路径剩余部分（如 "classes/TurtleRecord"）
     let pathParam = req.query.path || "";
-    
-    // 也尝试从 req.url 中提取路径（兼容不同 Vercel 版本）
+
+    // 兼容：如果没有 query.path，从 URL pathname 提取
     if (!pathParam) {
       const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
-      let full_path = parsedUrl.pathname.replace(/^\/api\/bmob\/?/, "");
-      pathParam = full_path;
+      pathParam = parsedUrl.pathname.replace(/^\/api\/bmob\/?/, "");
     }
 
-    // 如果没有路径参数，返回调试信息
+    // 健康检查
     if (!pathParam || pathParam === "") {
       return res.json({
         status: "ok",
@@ -45,15 +44,19 @@ export default async function handler(req, res) {
     // 确保路径以 / 开头
     if (!pathParam.startsWith("/")) pathParam = "/" + pathParam;
 
-    // 获取查询字符串
+    // ===== 构建查询字符串 =====
+    // 关键：req.url 中混入了 rewrite 注入的 path 参数，需要排除它
     const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
-    const queryString = parsedUrl.search || "";
-    const fullPath = queryString ? pathParam + queryString : pathParam;
+    const searchParams = new URLSearchParams(parsedUrl.search);
+    // 删除 rewrite 注入的 path 参数，只保留原始业务查询参数（如 where, order, limit 等）
+    searchParams.delete("path");
+    const queryString = searchParams.toString();
+    const fullPath = queryString ? `${pathParam}?${queryString}` : pathParam;
     const bmobUrl = `${BMOB_CONFIG.apiBase}${fullPath}`;
 
     console.log(`[Proxy] ${req.method} → ${bmobUrl}`);
 
-    // ===== 构建发往 Bmob 的请求 =====
+    // ===== 构建发往 Bmob 的请求头 =====
     const bmobHeaders = {
       "Content-Type": "application/json",
       "X-Bmob-Application-Id": BMOB_CONFIG.applicationId,
@@ -61,8 +64,10 @@ export default async function handler(req, res) {
       "X-Bmob-Safe-Code": BMOB_CONFIG.safeCode
     };
 
-    if (req.headers["x-session-token"]) {
-      bmobHeaders["x-session-token"] = req.headers["x-session-token"];
+    // 转发 session token — Bmob REST API 要求 header 名为 X-Bmob-Session-Token
+    const sessionToken = req.headers["x-session-token"] || req.headers["x-bmob-session-token"];
+    if (sessionToken) {
+      bmobHeaders["X-Bmob-Session-Token"] = sessionToken;
     }
 
     const fetchOpts = { method: req.method, headers: bmobHeaders };
