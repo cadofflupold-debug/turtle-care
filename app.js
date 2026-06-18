@@ -2410,15 +2410,8 @@ const speciesCatalog = [
       const sessionToken = localStorage.getItem("bmob_session_token");
       if (sessionToken) {
         try {
-          const headers = USE_LOCAL_PROXY
-            ? { "Content-Type": "application/json", "x-session-token": sessionToken }
-            : {
-                "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-                "X-Bmob-REST-API-Key": BMOB_REST_API_KEY,
-                "X-Bmob-Safe-Code": BMOB_API_SAFE_CODE,
-                "X-Bmob-Session-Token": sessionToken,
-                "Content-Type": "application/json"
-              };
+          // 代理模式下认证头由 server.js / Vercel Function 自动注入
+          const headers = { "Content-Type": "application/json", "x-session-token": sessionToken };
           const res = await fetch(`${BMOB_API_BASE}/users/me`, { method: "GET", headers });
           const user = await res.json().catch(() => ({}));
           if (res.ok && !user.code && user.objectId) {
@@ -2459,14 +2452,7 @@ const speciesCatalog = [
         const loginUrl = `${BMOB_API_BASE}/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
         const res = await fetch(loginUrl, {
           method: "GET",
-          headers: USE_LOCAL_PROXY
-            ? { "Content-Type": "application/json" }
-            : {
-                "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-                "X-Bmob-REST-API-Key": BMOB_REST_API_KEY,
-                "X-Bmob-Safe-Code": BMOB_API_SAFE_CODE,
-                "Content-Type": "application/json"
-              }
+          headers: { "Content-Type": "application/json" }
         });
         const json = await res.json().catch(() => ({}));
         if (res.ok && !json.code && json.sessionToken) {
@@ -2522,18 +2508,11 @@ const speciesCatalog = [
       setAuthMessage("正在登录...", false);
 
       try {
-        // 通过代理或直连调用 Bmob 登录 API
+        // 通过代理调用 Bmob 登录 API
         const loginUrl = `${BMOB_API_BASE}/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
         const res = await fetch(loginUrl, {
           method: "GET",
-          headers: USE_LOCAL_PROXY
-            ? { "Content-Type": "application/json" }
-            : {
-                "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-                "X-Bmob-REST-API-Key": BMOB_REST_API_KEY,
-                "X-Bmob-Safe-Code": BMOB_API_SAFE_CODE,
-                "Content-Type": "application/json"
-              }
+          headers: { "Content-Type": "application/json" }
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json.code) throw json;

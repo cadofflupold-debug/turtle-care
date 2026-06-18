@@ -91,16 +91,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 从 URL 中提取要转发的路径
+    // 从 URL 中提取要转发的路径（包含查询字符串）
     // 请求格式: /api/bmob/login?username=xxx&password=xxx
     //           /api/bmob/classes/TurtleRecord
-    //           /api/bmob/users
     //           /api/bmob/users/me
-    //           /api/bmob/2/files/filename (文件上传 - 特殊处理)
-    const urlPath = new URL(req.url, `http://${req.headers.host}`).pathname;
-    const proxyPath = urlPath.replace(/^\/api\/bmob/, "") || "/";
+    const fullUrl = new URL(req.url, `http://${req.headers.host}`);
+    const proxyPath = fullUrl.pathname.replace(/^\/api\/bmob/, "") || "/";
+    // 保留原始查询字符串
+    const queryString = fullUrl.search;  // 包含 "?" 的完整查询字符串
+    const fullPath = queryString ? proxyPath + queryString : proxyPath;
 
-    console.log(`[Bmob Proxy] ${req.method} ${proxyPath}`);
+    console.log(`[Bmob Proxy] ${req.method} ${fullPath}`);
 
     // 收集请求 body
     let body = null;
@@ -108,8 +109,8 @@ export default async function handler(req, res) {
       body = await collectBody(req);
     }
 
-    // 转发到 Bmob
-    const result = await bmobProxyRequest(req.method, proxyPath, req.headers || {}, body);
+    // 转发到 Bmob（包含查询字符串）
+    const result = await bmobProxyRequest(req.method, fullPath, req.headers || {}, body);
 
     // 设置 CORS 头
     res.setHeader("Access-Control-Allow-Origin", "*");
