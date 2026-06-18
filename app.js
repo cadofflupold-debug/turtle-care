@@ -61,10 +61,14 @@ const QWEATHER_API_KEY = "431f5dfc02a546fb9b880b4459314678";
 
     // ===== API 模式判断 =====
     // localhost/127.0.0.1 → 走本地代理 server.js（绕过浏览器代理干扰）
-    // 其他（公网部署）→ 直接调用 Bmob REST API（Bmob 已开启 CORS *）
-    const IS_LOCALHOST = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-    const USE_LOCAL_PROXY = IS_LOCALHOST;
-    const BMOB_API_BASE = USE_LOCAL_PROXY ? "/api/bmob" : "https://api.bmobcloud.com/1";
+    // Vercel 公网部署（vercel.app 域名） → 走 Vercel Serverless Function 代理 /api/bmob
+    // 其他 → 直接调用 Bmob REST API（Bmob 已开启 CORS *）
+    const hostname = location.hostname;
+    const IS_LOCALHOST = hostname === "localhost" || hostname === "127.0.0.1";
+    const IS_VERCEL = hostname.endsWith(".vercel.app") || hostname.endsWith(".vercel.sh");
+    // 在本地或 Vercel 环境下都使用代理模式，避免跨域和网络限制
+    const USE_LOCAL_PROXY = IS_LOCALHOST || IS_VERCEL;
+    const BMOB_API_BASE = "/api/bmob";
 
 const speciesCatalog = [
   { id: "species_spotted_turtle", name: "星点水龟", scientificName: "Clemmys guttata", minTemp: 22, maxTemp: 27, canHibernate: true, enabled: true },
@@ -755,16 +759,10 @@ const speciesCatalog = [
       const timerId = setTimeout(() => controller.abort(), 15000);
 
       try {
+        // 代理模式下认证头由 server.js / Vercel Function 自动注入
         const response = await fetch(`${BMOB_API_BASE}${path}`, {
           method: options.method || "GET",
-          headers: USE_LOCAL_PROXY
-            ? { "Content-Type": "application/json" }
-            : {
-                "Content-Type": "application/json",
-                "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-                "X-Bmob-REST-API-Key": BMOB_REST_API_KEY,
-                "X-Bmob-Safe-Code": BMOB_API_SAFE_CODE
-              },
+          headers: { "Content-Type": "application/json" },
           body: options.body ? JSON.stringify(options.body) : undefined,
           signal: controller.signal
         });
@@ -786,17 +784,11 @@ const speciesCatalog = [
       const controller = new AbortController();
       const timerId = window.setTimeout(() => controller.abort(), 45000);
 
-      const uploadBase = USE_LOCAL_PROXY ? "/api/bmob/2/files" : "https://api.bmobcloud.com/2/files";
+      // 统一走代理模式（本地 server.js 或 Vercel Serverless Function）
+      const uploadBase = "/api/bmob/2/files";
       const response = await fetch(`${uploadBase}/${safeName}`, {
         method: "POST",
-        headers: USE_LOCAL_PROXY
-          ? { "Content-Type": file.type || "application/octet-stream" }
-          : {
-              "Content-Type": file.type || "application/octet-stream",
-              "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-              "X-Bmob-REST-API-Key": BMOB_REST_API_KEY,
-              "X-Bmob-Safe-Code": BMOB_API_SAFE_CODE
-            },
+        headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
         signal: controller.signal
       }).finally(() => window.clearTimeout(timerId));
@@ -2364,23 +2356,10 @@ const speciesCatalog = [
     // REST 辅助：携带 session token 的请求（登录后操作需要）
     // ==========================================================================
     async function bmobRestRequestWithSession(path, options = {}) {
-      const headers = USE_LOCAL_PROXY
-        ? { "Content-Type": "application/json" }
-        : {
-            "Content-Type": "application/json",
-            "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-            "X-Bmob-REST-API-Key": BMOB_REST_API_KEY
-          };
-
-      if (!USE_LOCAL_PROXY && BMOB_API_SAFE_CODE && !BMOB_API_SAFE_CODE.includes("YOUR_")) {
-        headers["X-Bmob-Safe-Code"] = BMOB_API_SAFE_CODE;
-      }
+      // 代理模式下认证头由 server.js / Vercel Function 自动注入
+      const headers = { "Content-Type": "application/json" };
       if (options.sessionToken) {
-        if (USE_LOCAL_PROXY) {
-          headers["x-session-token"] = options.sessionToken;
-        } else {
-          headers["X-Bmob-Session-Token"] = options.sessionToken;
-        }
+        headers["x-session-token"] = options.sessionToken;
       }
 
       const controller = new AbortController();

@@ -1,17 +1,15 @@
 # 依赖和临时文件
 node_modules/
 
-# 本地开发（不需要部署）
-server.js
+# 本地开发（不需要公网部署）
 start.bat
-vercel.json
 
 # 备份文件
 backup-*
 *.bak-*
 
-# auth-version 开发目录
-auth-version/
+# auth-version 开发目录（已移至根目录作为主要部署源）
+# auth-version/
 
 # 部署指南（本地参考用）
 部署指南.md
