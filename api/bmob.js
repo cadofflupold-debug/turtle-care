@@ -7,20 +7,26 @@ const BMOB_CONFIG = {
   applicationId: "742f16bcc0203f6f8ec2cc222eccacc9",
   restApiKey: "4c9ce5f4b49032086bea11863d0d817e",
   safeCode: "1234567891234567",
-  // 普通 API: https://api.bmobcloud.com/1/classes/TurtleRecord
   apiBase: "https://api.bmobcloud.com/1",
-  // 文件上传 API: https://api.bmobcloud.com/2/files/文件名
   fileApiBase: "https://api.bmobcloud.com/2"
 };
 
-// 允许大文件上传
+// 对于文件上传请求，禁用 bodyParser 以获取原始二进制数据
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: "4.5mb"
-    }
+    bodyParser: false
   }
 };
+
+// 读取可读流的全部内容为 Buffer
+function readStream(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
 
 export default async function handler(req, res) {
   // ===== CORS 头 =====
@@ -51,7 +57,7 @@ export default async function handler(req, res) {
 
     if (!pathParam.startsWith("/")) pathParam = "/" + pathParam;
 
-    // ===== 构建查询字符串（排除 rewrite 注入的 path 参数）=====
+    // ===== 构建查询字符串 =====
     const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
     const searchParams = new URLSearchParams(parsedUrl.search);
     searchParams.delete("path");
@@ -59,26 +65,24 @@ export default async function handler(req, res) {
     const fullPath = queryString ? `${pathParam}?${queryString}` : pathParam;
 
     // ===== 判断请求类型 =====
-    // 文件上传: POST /2/files/文件名
     const isFileUpload = pathParam.startsWith("/2/files/") && req.method === "POST";
 
     // 选择正确的 API base URL
-    // 文件上传用 fileApiBase (https://api.bmobcloud.com/2)
-    // 普通 API 用 apiBase (https://api.bmobcloud.com/1)
-    let baseUrl;
-    let urlPath;
+    let baseUrl, urlPath;
     if (isFileUpload) {
-      // pathParam 是 /2/files/xxx.jpg，fileApiBase 是 https://api.bmobcloud.com/2
-      // 所以需要去掉 pathParam 开头的 /2，变成 /files/xxx.jpg
       baseUrl = BMOB_CONFIG.fileApiBase;
-      urlPath = pathParam.replace(/^\/2/, ""); // /files/xxx.jpg
+      urlPath = pathParam.replace(/^\/2/, "");
     } else {
       baseUrl = BMOB_CONFIG.apiBase;
       urlPath = pathParam;
     }
     const bmobUrl = baseUrl + (queryString ? `${urlPath}?${queryString}` : urlPath);
 
-    console.log(`[Proxy] ${req.method} → ${bmobUrl} | fileUpload: ${isFileUpload} | content-type: ${req.headers["content-type"]}`);
+    console.log(`[Proxy] ${req.method} -> ${bmobUrl} | fileUpload: ${isFileUpload} | content-type: ${req.headers["content-type"]}`);
+
+    // ===== 读取请求体 =====
+    // 因为 bodyParser 被禁用，需要手动读取 req 流
+    const rawBody = await readStream(req);
 
     // ===== 构建发往 Bmob 的请求头 =====
     const bmobHeaders = {
@@ -101,16 +105,15 @@ export default async function handler(req, res) {
 
     const fetchOpts = { method: req.method, headers: bmobHeaders };
 
-    // ===== 处理请求体 =====
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      if (isFileUpload && req.body) {
-        // 文件上传：把 body 转为 Buffer 以保留二进制数据
-        // Vercel bodyParser 把 body 解析为 string (UTF-8)，用 latin1 编码转回 Buffer 保留原始字节
-        const bodyBuffer = Buffer.from(req.body, "latin1");
-        fetchOpts.body = bodyBuffer;
-        bmobHeaders["Content-Length"] = bodyBuffer.length.toString();
-      } else if (req.body) {
-        fetchOpts.body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    // ===== 设置请求体 =====
+    if (req.method !== "GET" && req.method !== "HEAD" && rawBody.length > 0) {
+      if (isFileUpload) {
+        // 文件上传：直接转发原始二进制 Buffer
+        fetchOpts.body = rawBody;
+        bmobHeaders["Content-Length"] = rawBody.length.toString();
+      } else {
+        // 普通 JSON 请求：rawBody 是 JSON 字符串
+        fetchOpts.body = rawBody.toString("utf-8");
       }
     }
 
