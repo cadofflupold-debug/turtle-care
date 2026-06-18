@@ -531,12 +531,13 @@ const speciesCatalog = [
     }
 
     // 压缩图片为 base64 data URL，用于直接存在 Bmob 记录里
-    // 目标大小：base64 字符串 < 500KB（原图约 370KB 以下）
-    async function compressImageToDataUrl(file, maxBase64Length = 500000) {
+    // 目标大小：base64 字符串 < 30KB（Bmob 免费套餐单字段限制约 40KB）
+    // 头像/龟照片 200x300 左右足够识别
+    async function compressImageToDataUrl(file, maxBase64Length = 30000) {
       const image = await readFileAsImage(file);
       const canvas = document.createElement("canvas");
-      // 头像用 800px 足够清晰了，照片日志可以适当大一点
-      const maxSide = 1024;
+      // 先缩小到合理尺寸：头像不需要太大
+      const maxSide = 400;
       const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
       canvas.width = Math.max(1, Math.round(image.width * scale));
       canvas.height = Math.max(1, Math.round(image.height * scale));
@@ -544,21 +545,26 @@ const speciesCatalog = [
       const ctx = canvas.getContext("2d");
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-      let quality = 0.75;
+      let quality = 0.6;
       let dataUrl = canvas.toDataURL("image/jpeg", quality);
 
-      while (dataUrl.length > maxBase64Length && quality > 0.3) {
-        quality -= 0.1;
+      while (dataUrl.length > maxBase64Length && quality > 0.15) {
+        quality -= 0.08;
         dataUrl = canvas.toDataURL("image/jpeg", quality);
       }
 
-      // 如果还太大，缩小尺寸
-      while (dataUrl.length > maxBase64Length && canvas.width > 200) {
-        canvas.width = Math.round(canvas.width * 0.7);
-        canvas.height = Math.round(canvas.height * 0.7);
+      // 如果还太大，继续缩小尺寸
+      while (dataUrl.length > maxBase64Length && canvas.width > 80) {
+        canvas.width = Math.round(canvas.width * 0.65);
+        canvas.height = Math.round(canvas.height * 0.65);
         const ctx2 = canvas.getContext("2d");
         ctx2.drawImage(image, 0, 0, canvas.width, canvas.height);
-        dataUrl = canvas.toDataURL("image/jpeg", 0.5);
+        dataUrl = canvas.toDataURL("image/jpeg", 0.4);
+      }
+
+      // 最终检查
+      if (dataUrl.length > maxBase64Length) {
+        throw new Error(`图片压缩后仍超出限制(${Math.round(dataUrl.length / 1024)}KB > ${Math.round(maxBase64Length / 1024)}KB)，请换一张更小的图片。`);
       }
 
       return dataUrl;
