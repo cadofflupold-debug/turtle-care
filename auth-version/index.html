@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>121的龟类养护站</title>
+  <script src="https://cdn.jsdelivr.net/npm/hydrogen-js-sdk/dist/Bmob-2.2.5.min.js"></script>
+
+  
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ===== 登录 / 注册 遮罩弹窗 ===== -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-logo">🐢</div>
+      <h2 class="auth-title">121的龟类养护站</h2>
+      <p class="auth-subtitle">登录后可查看并管理你的专属龟龟档案</p>
+
+      <div class="form-stack">
+        <div class="form-field">
+          <label for="authUsername">账号（用户名）</label>
+          <input id="authUsername" type="text" placeholder="请输入账号" autocomplete="username" />
+        </div>
+        <div class="form-field">
+          <label for="authPassword">密码</label>
+          <input id="authPassword" type="password" placeholder="请输入密码" autocomplete="current-password" />
+        </div>
+        <div class="form-field auth-invite-field" id="authInviteField" style="display:none;">
+          <label for="authInviteCode">邀请码（注册时必填）</label>
+          <input id="authInviteCode" type="text" placeholder="例如：TURTLE-2026" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="auth-options">
+        <label class="checkbox-field auth-checkbox">
+          <input id="rememberLoginCheckbox" type="checkbox" />
+          记住登录信息
+        </label>
+        <label class="checkbox-field auth-checkbox">
+          <input id="autoLoginCheckbox" type="checkbox" />
+          自动登录
+        </label>
+      </div>
+
+      <div id="authMessage" class="auth-message" style="display:none;"></div>
+
+      <div class="auth-actions">
+        <button id="loginButton" type="button">登录</button>
+        <button id="registerButton" type="button" class="secondary-button">注册新账号</button>
+      </div>
+      <p class="auth-hint" id="authHint">已有账号？直接登录即可。</p>
+    </div>
+  </div>
+
+  <!-- ===== 主应用区域 ===== -->
+  <main class="app" id="mainApp" style="display:none;">
+
+    <!-- 右上角退出登录 -->
+    <div class="app-topbar">
+      <span id="currentUserLabel" class="user-label"></span>
+      <button id="logoutButton" type="button" class="secondary-button logout-button">退出登录</button>
+    </div>
+    <h1>121的龟类养护站</h1>
+    <p class="subtitle">今日天气，是龟龟养护判断的第一步。</p>
+
+    <div class="species-control">
+      <label for="speciesSelect">当前养护品种</label>
+      <div class="select-wrap">
+        <select id="speciesSelect">
+          <option value="species_pond">黄喉拟水龟</option>
+          <option value="species_box">黄缘闭壳龟</option>
+          <option value="species_eastern_mud">东方泥龟</option>
+          <option value="species_tiger_musk">虎纹麝香龟</option>
+          <option value="species_striped_mud">斑纹泥龟</option>
+          <option disabled>──────── 暂未启用的蛋龟品种 ────────</option>
+          <option disabled>窄桥麝香龟</option>
+          <option disabled>剃刀麝香龟</option>
+          <option disabled>巨头麝香龟</option>
+          <option disabled>平背麝香龟</option>
+          <option disabled>果核泥龟</option>
+          <option disabled>红面泥龟</option>
+          <option disabled>白唇泥龟</option>
+          <option disabled>墨西哥巨蛋龟</option>
+          <option disabled>萨尔文巨蛋龟</option>
+        </select>
+      </div>
+      <div id="speciesDirectory" class="species-directory-wrap"></div>
+    </div>
+
+    <section class="main-card">
+      <div class="location-selector">
+        <div class="location-display-row">
+          <div id="currentLocationLabel" class="current-location-label">当前位置：杭州</div>
+          <button id="editLocationButton" class="edit-location-button" type="button">修改城市</button>
+        </div>
+        <div id="locationEditArea" class="location-edit-area" style="display:none;">
+          <div class="location-input-wrap">
+            <input id="citySearchInput" type="text" placeholder="输入城市名（如：杭州、萧山、上城）" autocomplete="off" />
+            <button id="geoLocateButton" class="geo-locate-button" title="自动定位" type="button">📍</button>
+          </div>
+          <div id="citySearchResults" class="city-search-results"></div>
+        </div>
+      </div>
+      <button id="weatherButton">获取今日当地天气</button>
+      <div id="result"></div>
+    </section>
+
+    <section class="archive-card">
+      <div class="card-header">
+        <div>
+          <h2 class="archive-title">乌龟成长档案</h2>
+          <p class="archive-subtitle">云端数据表：TurtleRecord。记录昵称、品种、出生年份、成熟状态与体重历史。</p>
+        </div>
+        <span id="bmobStatus" class="status-pill warn">Bmob 未配置</span>
+      </div>
+
+      <div class="archive-grid">
+        <section class="archive-panel">
+          <h3 class="card-title">新建档案</h3>
+          <div class="form-stack">
+            <div class="form-field">
+              <label for="nicknameInput">乌龟昵称</label>
+              <input id="nicknameInput" type="text" placeholder="例如：小黄、121一号" />
+            </div>
+
+            <div class="form-field">
+              <label for="recordSpeciesSelect">品种</label>
+              <div class="select-wrap">
+                <select id="recordSpeciesSelect">
+                  <option>黄喉拟水龟</option>
+                  <option>黄缘闭壳龟</option>
+                  <option>东方泥龟</option>
+                  <option>虎纹麝香龟</option>
+                  <option>斑纹泥龟</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="birthYearInput">出生年份</label>
+              <input id="birthYearInput" type="number" min="1980" max="2100" placeholder="例如：2024" />
+            </div>
+
+            <div class="form-field">
+              <label for="lifeStageSelect">生长阶段</label>
+              <div class="select-wrap">
+                <select id="lifeStageSelect">
+                  <option value="hatchling">龟苗</option>
+                  <option value="subadult">压成体</option>
+                  <option value="mature">成熟个体</option>
+                  <option value="breeder">稳产种龟</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="checkbox-field">
+              <input id="isMatureInput" type="checkbox" />
+              是否已成熟
+            </label>
+
+            <div class="form-actions">
+              <button id="createTurtleButton" type="button">新建档案</button>
+            </div>
+          </div>
+
+          <div id="archiveMessage" class="archive-message">
+            填入 Bmob Key 后，档案会保存到 TurtleRecord 表。
+          </div>
+        </section>
+
+        <section class="archive-panel">
+          <div class="card-header">
+            <h3 class="card-title">已录入乌龟</h3>
+            <button id="refreshTurtlesButton" type="button">刷新</button>
+          </div>
+          <div id="turtleList" class="turtle-list">
+            <div class="archive-message">正在准备档案列表...</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+  </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
