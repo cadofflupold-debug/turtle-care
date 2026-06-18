@@ -16,3 +16,7 @@ backup-*
 
 # LOGO 源文件
 LOGO/*.psd
+# Local secrets: never commit real environment variables
+.env
+.env.*
+!.env.example

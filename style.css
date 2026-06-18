@@ -1232,3 +1232,15 @@ button:disabled {
     margin-top: 2px;
   }
 }
+
+.species-profile-card {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(53, 115, 87, 0.18);
+  background: rgba(241, 248, 244, 0.85);
+}
+
+.species-profile-card strong {
+  color: var(--primary-dark);
+}

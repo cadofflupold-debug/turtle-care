@@ -49,25 +49,21 @@ const QWEATHER_API_KEY = "431f5dfc02a546fb9b880b4459314678";
       return VALID_INVITE_CODES.includes(normalized);
     }
 
-    const BMOB_APPLICATION_ID = "742f16bcc0203f6f8ec2cc222eccacc9";
-    const BMOB_REST_API_KEY = "4c9ce5f4b49032086bea11863d0d817e";
-    const BMOB_SECRET_KEY = "5d0b82ad4b300afa";
-    const BMOB_API_SAFE_CODE = "1234567891234567";
+    // ===== Bmob 安全配置 =====
+    // 前端不保存任何 Bmob Key；所有认证头由 /api/bmob 代理在服务端注入。
+    // Vercel 部署时请在 Environment Variables 中配置 BMOB_APPLICATION_ID、BMOB_REST_API_KEY、BMOB_API_SAFE_CODE。
     const BMOB_SDK_URLS = [
       "https://cdn.jsdelivr.net/npm/hydrogen-js-sdk/dist/Bmob-2.2.5.min.js",
       "https://cdn.jsdelivr.net/npm/hydrogen-js-sdk@2.2.5/dist/Bmob-2.2.5.min.js",
       "https://unpkg.com/hydrogen-js-sdk/dist/Bmob-2.2.5.min.js"
     ];
 
-    // ===== API 模式判断 =====
-    // localhost/127.0.0.1 → 走本地代理 server.js（绕过浏览器代理干扰）
-    // Vercel 公网部署（vercel.app 域名） → 走 Vercel Serverless Function 代理 /api/bmob
-    // 其他 → 直接调用 Bmob REST API（Bmob 已开启 CORS *）
+    // ===== API mode =====
+    // Always use /api/bmob proxy: local server.js in development, Vercel Function in production.
+    // The frontend never stores Bmob keys.
     const hostname = location.hostname;
     const IS_LOCALHOST = hostname === "localhost" || hostname === "127.0.0.1";
     const IS_VERCEL = hostname.endsWith(".vercel.app") || hostname.endsWith(".vercel.sh");
-    // 在本地或 Vercel 环境下都使用代理模式，避免跨域和网络限制
-    const USE_LOCAL_PROXY = IS_LOCALHOST || IS_VERCEL;
     const BMOB_API_BASE = "/api/bmob";
 
 const speciesCatalog = [
@@ -92,6 +88,46 @@ const speciesCatalog = [
       data[item.id] = item;
       return data;
     }, {});
+
+    // 物种增强规则：从本地知识库/剪藏库抽取后，作为天气建议的修正层。
+    // 规则设计原则：先按生态型判断，再按温度、天气、阶段做保守修正。
+    const speciesEnhancements = {
+      species_pond: {
+        ecologyType: "pond_shallow_basking",
+        waterDepth: "池塘型水龟，水位不宜一上来过深；深水必须有歇脚处、浮木或缓坡。",
+        baskingNeed: "喜欢晒背，需要能完全离水晒干身体。",
+        dietType: "杂食偏肉食",
+        feedingBias: "参考头部大小，八分饱；幼龟可每日少量，亚成体/成体可隔日或2-3天一喂。",
+        speciesWarning: "黄喉苗浅水过背，避免空调房和大温差；静水高温暴晒先遮阴、控残饵。",
+        sourceNote: "剪藏：黄喉拟水龟｜龟中的治愈系小天使；龟镜黄喉赏玩文章。"
+      },
+      species_tiger_musk: {
+        ecologyType: "deep_water_musk",
+        waterDepth: "高度水栖，适应中深水；苗子先过背，适应后在沉木/石堆落脚充足时逐步加深。",
+        baskingNeed: "上陆和晒背频率不高，环境重点是水下安全感和暗色躲避。",
+        dietType: "肉食/杂食偏肉",
+        feedingBias: "小型蛋龟，偏动物蛋白，少量投喂，残饵必须及时清。",
+        speciesWarning: "虎纹麝香龟苗不要直接空旷深水；高温静水缺氧和应激要谨慎，苗期第一年可加温降低损耗。",
+        sourceNote: "剪藏：深水小老虎-虎纹麝香龟。"
+      },
+      species_razorback_musk: { ecologyType: "deep_water_musk", waterDepth: "水性较好，可中深水；幼体也必须有沉木、水草、石堆等连续落脚点。", baskingNeed: "晒背需求低于拟水龟，但不能没有浅台/歇脚处。", dietType: "肉食/杂食偏肉", feedingBias: "偏动物蛋白，避免长期高脂肪饵料。", speciesWarning: "深水不等于强水流，强过滤噪音和水流会造成应激。" },
+      species_common_musk: { ecologyType: "deep_water_musk", waterDepth: "水性好，可中深水，但必须有水下落脚点和躲避。", baskingNeed: "晒背需求偏低，保持能轻松换气和休息。", dietType: "肉食/杂食偏肉", feedingBias: "小体型，宁可少喂，不要长期猛催。", speciesWarning: "耐受较强但怕闷水坏水，高温天要控残饵。" },
+      species_loggerhead_musk: { ecologyType: "deep_water_musk", waterDepth: "水性较好，可中深水；水下落脚点、沉木和躲避不可少。", baskingNeed: "晒背需求较低，但需安全休息位。", dietType: "肉食/杂食偏肉", feedingBias: "偏动物蛋白，控制频率和体型。", speciesWarning: "高温期控残饵，低温期按耐寒个体逐步停喂。" },
+      species_eastern_mud: { ecologyType: "mud_bottom_musk", waterDepth: "浅水到中水位，底部躲避、沉木和落脚点比空旷深水重要。", baskingNeed: "晒背需求不如拟水龟强，但必须能轻松出水。", dietType: "肉食/杂食偏肉", feedingBias: "偏动物蛋白，小体型不宜一次喂太撑。", speciesWarning: "闷热缺氧和强水流应激要重点避免。" },
+      species_florida_mud: { ecologyType: "mud_bottom_musk", waterDepth: "浅水到中水位，保留水下躲避和爬靠点。", baskingNeed: "可低频晒背，但不能没有上岸/歇脚条件。", dietType: "肉食/杂食偏肉", feedingBias: "动物性饵料为主，控制单次投喂量。", speciesWarning: "夏季静水高温时先控残饵和缺氧。" },
+      species_striped_mud: { ecologyType: "mud_bottom_musk", waterDepth: "浅水到中水位，水下躲避、暗处和落脚点优先。", baskingNeed: "晒背需求中低，但要能离水休息。", dietType: "肉食/杂食偏肉", feedingBias: "偏动物蛋白，温度波动期减量。", speciesWarning: "高温静水环境重点防残饵坏水。" },
+      species_narrow_bridge: { ecologyType: "tropical_mud_bottom", waterDepth: "浅水到中等水位，底部躲避优先，水不能太急。", baskingNeed: "不以强晒背为核心，但要有安全上岸/歇脚处。", dietType: "强肉食", feedingBias: "偏动物性饵料，少喂多餐，不建议植物性比例过高。", speciesWarning: "热带种怕低温突降，低温期宁可停喂保温。" },
+      species_savannah_side_neck: { ecologyType: "large_tropical_musk", waterDepth: "大型热带蛋龟，水体要大而稳定，配足沉木/平台。", baskingNeed: "晒背需求不高，但必须有安全歇脚和躲避。", dietType: "强肉食", feedingBias: "高蛋白但要控频率，避免肥胖和坏水。", speciesWarning: "不适合低温冬眠，降温时比黄喉更保守。" },
+      species_helmeted_mud: { ecologyType: "african_warm_mud", waterDepth: "暖水泥底型，浅水到中水位，需躲避和可上岸处。", baskingNeed: "可提供晒点，但核心是温暖稳定和低应激。", dietType: "偏肉食", feedingBias: "动物性饵料为主，低温时坚决减量或停喂。", speciesWarning: "不冬眠，怕低温；高温闷水同样要控残饵。" },
+      species_box: { ecologyType: "semi_terrestrial_box", waterDepth: "半水龟，水区以浅水饮水/泡水为主，陆地区和躲避更重要。", baskingNeed: "需要干爽陆地、阴影和局部晒点，不能长期泡深水。", dietType: "杂食", feedingBias: "动物蛋白、果蔬和龟粮搭配，梅雨闷热期少喂。", speciesWarning: "闷热潮湿容易出问题，重点是通风、干湿分区。" },
+      species_yellow_headed_box: { ecologyType: "tropical_forest_box", waterDepth: "半水/林栖倾向，浅水盆即可，重点是湿润垫材与躲避。", baskingNeed: "不适合暴晒，柔和光照、通风和湿度梯度更重要。", dietType: "杂食偏动物性", feedingBias: "温暖稳定时少量多样化，低温和新到家阶段保守。", speciesWarning: "怕冷也怕闷，温差和通风是关键。" },
+      species_three_striped_box: { ecologyType: "warm_semi_aquatic_box", waterDepth: "半水环境，浅水区配足陆地和躲避。", baskingNeed: "需要可干燥身体的陆地，避免长期湿冷。", dietType: "杂食偏肉食", feedingBias: "温暖稳定时正常喂，低于舒适温区明显减量。", speciesWarning: "华南暖水种，倒春寒和夜间低温风险高。" },
+      species_spotted_turtle: { ecologyType: "cold_tolerant_shallow_aquatic", waterDepth: "浅水到中等水位，必须有大量歇脚、浮岛或水草支撑。", baskingNeed: "需要稳定晒背点，避免长期闷湿。", dietType: "杂食偏肉食", feedingBias: "不按大水龟满负荷催长，温度合适也以少量多观察为主。", speciesWarning: "偏怕闷热，高温天比黄喉更应保守。" }
+    };
+
+    Object.entries(speciesEnhancements).forEach(([id, extra]) => {
+      if (speciesData[id]) Object.assign(speciesData[id], extra);
+    });
 
     const lifeStageData = {
       hatchling: "龟苗",
@@ -319,47 +355,32 @@ const speciesCatalog = [
     }
 
     async function initBmob() {
-      // 优先走 REST 模式：只要 Application ID 和 REST API Key 已配置就直接用
-      if (!BMOB_APPLICATION_ID.includes("YOUR_") &&
-          !BMOB_REST_API_KEY.includes("YOUR_") &&
-          !BMOB_API_SAFE_CODE.includes("YOUR_")) {
+      // 安全模式：前端始终走 /api/bmob 代理，Bmob Key 只存在于服务端环境变量。
+      try {
+        const response = await fetch(`${BMOB_API_BASE}`, { method: "GET" });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data.code === "BMOB_ENV_MISSING") {
+          bmobReady = false;
+          bmobMode = "none";
+          bmobStatus.textContent = "Bmob 环境变量缺失";
+          bmobStatus.classList.add("warn");
+          setArchiveMessage(data.error || "Bmob 代理未配置环境变量，请在 Vercel 或本地 .env 中设置。", true);
+          return false;
+        }
+
         bmobReady = true;
         bmobMode = "rest";
         bmobStatus.textContent = "Bmob REST 已连接";
         bmobStatus.classList.remove("warn");
-        setArchiveMessage("已使用 Application ID + REST API Key + Safe Code 连接 Bmob REST API。", false);
-        return true;
-      }
-
-      // 旧逻辑兜底：尝试加载 SDK
-      const sdkLoaded = await ensureBmobSdkLoaded();
-
-      if (!sdkLoaded) {
-        bmobStatus.textContent = "Bmob 加载失败";
-        bmobStatus.classList.add("warn");
-        setArchiveMessage("Bmob SDK 加载失败：请检查网络，或手动下载 Bmob-2.2.5.min.js 后改成本地引用。", true);
-        return false;
-      }
-
-      if (BMOB_SECRET_KEY.includes("YOUR_") || BMOB_API_SAFE_CODE.includes("YOUR_")) {
-        bmobStatus.textContent = "Bmob 待配置";
-        bmobStatus.classList.add("warn");
-        setArchiveMessage("请先把代码顶部的 YOUR_SECRET_KEY 和 YOUR_API_SAFE_CODE 替换为你的 Bmob 配置。", false);
-        return false;
-      }
-
-      try {
-        Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_SAFE_CODE);
-        bmobReady = true;
-        bmobMode = "sdk";
-        bmobStatus.textContent = "Bmob 已连接";
-        bmobStatus.classList.remove("warn");
-        setArchiveMessage("Bmob 已初始化，正在读取云端档案。", false);
+        setArchiveMessage("已通过安全代理连接 Bmob REST API。", false);
         return true;
       } catch (error) {
-        bmobStatus.textContent = "Bmob 初始化失败";
+        bmobReady = false;
+        bmobMode = "none";
+        bmobStatus.textContent = "Bmob 代理连接失败";
         bmobStatus.classList.add("warn");
-        setArchiveMessage(`Bmob 初始化失败：${error.message || error}`, true);
+        setArchiveMessage(`Bmob 代理连接失败：${error.message || error}`, true);
         return false;
       }
     }
@@ -761,25 +782,16 @@ const speciesCatalog = [
       });
       const errors = [];
 
-      // 方案1：尝试 Bmob REST 文件上传
-      if (!BMOB_APPLICATION_ID.includes("YOUR_") && !BMOB_REST_API_KEY.includes("YOUR_")) {
-        try {
-          return await bmobRestUploadFile(uploadFile);
-        } catch (error) {
-          console.warn("Bmob REST file upload failed, trying SDK fallback.", error);
-          errors.push(`REST：${formatBmobError(error)}`);
-        }
-      }
-
-      // 方案2：尝试 Bmob SDK 文件上传
+      // Option 1: upload via secure Bmob REST proxy
       try {
-        return await uploadPhotoFileBySdk(uploadFile, fileName);
+        return await bmobRestUploadFile(uploadFile);
       } catch (error) {
-        errors.push(`SDK：${formatBmobError(error)}`);
+        console.warn("Bmob REST file upload failed, using fallback.", error);
+        errors.push(`REST: ${formatBmobError(error)}`);
       }
 
-      // 方案3：图片压缩为 base64 data URL，直接存在 Bmob 记录里
-      // （Bmob 文件服务需要备案域名，这是不依赖文件服务的替代方案）
+      // Option 2: compress image to base64 data URL and save it in the Bmob record
+      // This fallback does not depend on Bmob file hosting.
       try {
         const dataUrl = await compressImageToDataUrl(file);
         return {
@@ -2044,6 +2056,95 @@ const speciesCatalog = [
       return reminders;
     }
 
+    function applySpeciesSpecificCareModifiers(advice, species, envData, alerts) {
+      const currentTemp = Number(envData.currentTemp);
+      const tempMax = Number(envData.tempMax);
+      const tempMin = Number(envData.tempMin);
+      const currentMonth = Number(envData.currentMonth);
+      const weatherText = envData.weatherText || "";
+      const ecologyType = species.ecologyType || "general";
+      const notes = [];
+
+      if (species.feedingBias) {
+        notes.push(`物种差异：${species.feedingBias}`);
+      }
+
+      if (ecologyType.includes("box") || ecologyType.includes("semi_terrestrial")) {
+        if (tempMax >= 30 || weatherText.includes("雨") || weatherText.includes("阴")) {
+          advice.feedingAmount = Math.min(advice.feedingAmount, 60);
+          advice.feedingFrequency = advice.feedingAmount > 0 ? "少量观察" : advice.feedingFrequency;
+          notes.push("半水龟今天重点不是加深水，而是通风、干湿分区和浅水饮用/泡水。闷热或连续阴雨时宁可少喂。 ");
+        } else {
+          notes.push("半水龟需要陆地区和躲避，水区以浅水为主，不按纯水龟深水逻辑处理。 ");
+        }
+      }
+
+      if (ecologyType.includes("deep_water_musk")) {
+        advice.feedingAmount = Math.min(advice.feedingAmount, 80);
+        notes.push("蛋龟/麝香龟偏水栖，可用中深水，但前提是有沉木、石堆或水草让它随时落脚换气；不要用强水流逼它游。 ");
+        if (tempMax >= 32) {
+          advice.feedingAmount = Math.min(advice.feedingAmount, 40);
+          notes.push("深水小型蛋龟高温天优先防缺氧和残饵坏水，今天喂食进一步保守。 ");
+        }
+      }
+
+      if (ecologyType.includes("mud_bottom") || ecologyType.includes("musk")) {
+        notes.push("泥龟/蛋龟更吃安全感，底部躲避和暗处比空旷亮缸更重要。 ");
+      }
+
+      if (ecologyType.includes("pond_shallow_basking")) {
+        notes.push("黄喉这类池塘型水龟要有水有陆、有阴有阳，晒台要能让龟完全离水晒干。 ");
+      }
+
+      if (species.canHibernate === false && (currentTemp < 20 || tempMin < 18)) {
+        advice.feedingAmount = 0;
+        advice.feedingFrequency = "暂停投喂/保温观察";
+        advice.physiologicalState = "低温风险";
+        notes.push("该品种不建议冬眠或不适合低温硬扛，低温时优先保温稳定，不能按黄喉的冬眠逻辑处理。 ");
+        alerts.push({
+          level: "orange",
+          text: `【${species.name}低温提醒】该品种不建议按黄喉方式冬眠。今日温度偏低，请先保温稳定并暂停投喂。`
+        });
+      }
+
+      if (species.canHibernate && tempMin <= 15 && currentMonth >= 9 && currentMonth <= 12) {
+        notes.push("这是可冬眠品种，但也要区分健康成体、苗子、病龟和新到家个体；弱苗不建议硬冬眠。 ");
+      }
+
+      if (ecologyType.includes("cold_tolerant") && tempMax >= 30) {
+        advice.feedingAmount = Math.min(advice.feedingAmount, 40);
+        advice.feedingFrequency = advice.feedingAmount > 0 ? "少量或停喂" : advice.feedingFrequency;
+        alerts.push({
+          level: "orange",
+          text: `【${species.name}高温提醒】该品种偏耐凉怕闷热，今日高温下请加强遮阴、通风和浅水稳定，喂食保守。`
+        });
+      }
+
+      if (species.speciesWarning) {
+        notes.push(`特别提醒：${species.speciesWarning}`);
+      }
+
+      advice.feedingNote = `${advice.feedingNote} ${notes.join("")}`.trim();
+      return advice;
+    }
+
+    function renderSpeciesProfileHtml(species) {
+      const rows = [
+        ["生态类型", species.ecologyType || "通用水龟"],
+        ["水深/环境", species.waterDepth || "按体型和水性逐步调整，必须有歇脚处。"],
+        ["晒背/干区", species.baskingNeed || "提供可完全离水的晒台或休息区。"],
+        ["食性", species.dietType || "杂食，按状态少量投喂。"],
+        ["资料依据", species.sourceNote || "当前为通用经验规则，后续可由资料库继续细化。"]
+      ];
+
+      return `
+        <div class="species-profile-card">
+          <strong>${species.name}物种习性修正</strong>
+          ${rows.map(([label, value]) => `<div class="time-window"><strong>${label}：</strong>${value}</div>`).join("")}
+        </div>
+      `;
+    }
+
     function calculateCareAdvice(envData) {
       const species = speciesData[currentSpecies];
       const currentTemp = Number(envData.currentTemp);
@@ -2174,6 +2275,8 @@ const speciesCatalog = [
         advice.feedingNote = "今日温差较大，建议停食观察，避免肠胃负担。";
       }
 
+      advice = applySpeciesSpecificCareModifiers(advice, species, envData, alerts);
+
       if (hasEggLayerTurtles()) {
         advice.feedingNote = `${advice.feedingNote} 档案中存在成熟或产蛋个体，投喂时建议增加钙源、维生素与优质动物蛋白，并保持营养均衡。`;
       }
@@ -2205,6 +2308,7 @@ const speciesCatalog = [
         ? `<div class="egg-reminder-card"><strong>产蛋提醒</strong>${eggReminders.map((item) => `<div>${item}</div>`).join("")}</div>`
         : "";
       const speciesSummaryHtml = renderSpeciesCountSummary();
+      const speciesProfileHtml = renderSpeciesProfileHtml(careAdvice.species);
 
       result.innerHTML = `
         <div class="content-grid">
@@ -2273,6 +2377,7 @@ const speciesCatalog = [
               <div class="time-window"><strong>频率建议：</strong>${careAdvice.feedingFrequency}。${careAdvice.feedingNote}</div>
               <div class="time-window"><strong>物种温区：</strong>${careAdvice.species.minTemp}-${careAdvice.species.maxTemp}℃；${careAdvice.species.canHibernate ? "可冬眠品种" : "不建议冬眠品种"}。</div>
               <div class="time-window"><strong>判断基准：</strong>今日最高温 ${careAdvice.feedingBaseTemp}℃，而不是当前瞬时温度。</div>
+              ${speciesProfileHtml}
               <div class="time-window"><strong>最佳窗口说明：</strong>${careAdvice.feedingTimeAdvice.bestWindow}</div>
               <div class="time-window"><strong>上班前：</strong>${careAdvice.feedingTimeAdvice.morningWindow}</div>
               <div class="time-window"><strong>傍晚：</strong>${careAdvice.feedingTimeAdvice.eveningWindow}</div>
@@ -2644,14 +2749,7 @@ const speciesCatalog = [
         // 通过代理或直连调用 Bmob 注册 API
         const res = await fetch(`${BMOB_API_BASE}/users`, {
           method: "POST",
-          headers: USE_LOCAL_PROXY
-            ? { "Content-Type": "application/json" }
-            : {
-                "Content-Type": "application/json",
-                "X-Bmob-Application-Id": BMOB_APPLICATION_ID,
-                "X-Bmob-REST-API-Key": BMOB_REST_API_KEY,
-                "X-Bmob-Safe-Code": BMOB_API_SAFE_CODE
-              },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password })
         });
         const json = await res.json().catch(() => ({}));

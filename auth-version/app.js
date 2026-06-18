@@ -49,9 +49,9 @@ const QWEATHER_API_KEY = "431f5dfc02a546fb9b880b4459314678";
       return VALID_INVITE_CODES.includes(normalized);
     }
 
-    const BMOB_APPLICATION_ID = "742f16bcc0203f6f8ec2cc222eccacc9";
-    const BMOB_REST_API_KEY = "4c9ce5f4b49032086bea11863d0d817e";
-    const BMOB_SECRET_KEY = "5d0b82ad4b300afa";
+    const BMOB_APPLICATION_ID = ""; // moved to server-side environment variables
+    const BMOB_REST_API_KEY = ""; // moved to server-side environment variables
+    const BMOB_SECRET_KEY = ""; // moved to server-side environment variables
     const BMOB_API_SAFE_CODE = "1234567891234567";
     const BMOB_SDK_URLS = [
       "https://cdn.jsdelivr.net/npm/hydrogen-js-sdk/dist/Bmob-2.2.5.min.js",

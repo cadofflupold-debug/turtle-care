@@ -1,15 +1,24 @@
 // ==========================================================================
 // Vercel Serverless Function - Bmob REST API 代理
 // 支持：普通 JSON API 请求 + 二进制文件上传
+// 安全说明：Bmob Key 必须通过 Vercel Environment Variables 注入，禁止写入前端代码。
 // ==========================================================================
 
 const BMOB_CONFIG = {
-  applicationId: "742f16bcc0203f6f8ec2cc222eccacc9",
-  restApiKey: "4c9ce5f4b49032086bea11863d0d817e",
-  safeCode: "1234567891234567",
-  apiBase: "https://api.bmobcloud.com/1",
-  fileApiBase: "https://api.bmobcloud.com/2"
+  applicationId: process.env.BMOB_APPLICATION_ID || "",
+  restApiKey: process.env.BMOB_REST_API_KEY || "",
+  safeCode: process.env.BMOB_API_SAFE_CODE || "",
+  apiBase: process.env.BMOB_API_BASE || "https://api.bmobcloud.com/1",
+  fileApiBase: process.env.BMOB_FILE_API_BASE || "https://api.bmobcloud.com/2"
 };
+
+function validateBmobConfig() {
+  const missing = [];
+  if (!BMOB_CONFIG.applicationId) missing.push("BMOB_APPLICATION_ID");
+  if (!BMOB_CONFIG.restApiKey) missing.push("BMOB_REST_API_KEY");
+  if (!BMOB_CONFIG.safeCode) missing.push("BMOB_API_SAFE_CODE");
+  return missing;
+}
 
 // 对于文件上传请求，禁用 bodyParser 以获取原始二进制数据
 export const config = {
@@ -38,6 +47,14 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  const missing = validateBmobConfig();
+  if (missing.length) {
+    return res.status(500).json({
+      code: "BMOB_ENV_MISSING",
+      error: `Bmob 环境变量缺失：${missing.join(", ")}`
+    });
+  }
+
   try {
     // ===== 提取要转发的 Bmob API 路径 =====
     let pathParam = req.query.path || "";
@@ -62,7 +79,6 @@ export default async function handler(req, res) {
     const searchParams = new URLSearchParams(parsedUrl.search);
     searchParams.delete("path");
     const queryString = searchParams.toString();
-    const fullPath = queryString ? `${pathParam}?${queryString}` : pathParam;
 
     // ===== 判断请求类型 =====
     const isFileUpload = pathParam.startsWith("/2/files/") && req.method === "POST";
@@ -81,7 +97,6 @@ export default async function handler(req, res) {
     console.log(`[Proxy] ${req.method} -> ${bmobUrl} | fileUpload: ${isFileUpload} | content-type: ${req.headers["content-type"]}`);
 
     // ===== 读取请求体 =====
-    // 因为 bodyParser 被禁用，需要手动读取 req 流
     const rawBody = await readStream(req);
 
     // ===== 构建发往 Bmob 的请求头 =====
@@ -108,11 +123,9 @@ export default async function handler(req, res) {
     // ===== 设置请求体 =====
     if (req.method !== "GET" && req.method !== "HEAD" && rawBody.length > 0) {
       if (isFileUpload) {
-        // 文件上传：直接转发原始二进制 Buffer
         fetchOpts.body = rawBody;
         bmobHeaders["Content-Length"] = rawBody.length.toString();
       } else {
-        // 普通 JSON 请求：rawBody 是 JSON 字符串
         fetchOpts.body = rawBody.toString("utf-8");
       }
     }
@@ -123,7 +136,6 @@ export default async function handler(req, res) {
 
     console.log(`[Response] ${response.status} | ${text.substring(0, 300)}`);
 
-    // ===== 返回响应 =====
     res.status(response.status);
 
     if (text.startsWith("{") || text.startsWith("[")) {
