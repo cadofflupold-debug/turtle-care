@@ -1,9 +1,6 @@
 // ==========================================================================
-// Vercel Serverless Function - Bmob REST API 代理 (Catch-All 路由)
+// Vercel Serverless Function - Bmob REST API 代理
 // ==========================================================================
-// 文件名 [...path].js 使 Vercel 自动将 /api/bmob/* 的所有子路径
-// 都路由到此函数，req.query.path 包含完整的子路径数组
-// 例如: /api/bmob/login?username=xxx → req.query.path = ["login"]
 
 const BMOB_CONFIG = {
   applicationId: "742f16bcc0203f6f8ec2cc222eccacc9",
@@ -23,32 +20,35 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ===== 从 req.query.path 重建 Bmob API 路径 =====
-    // Vercel catch-all 路由: /api/bmob/login → path = ["login"]
-    //                       /api/bmob/classes/TurtleRecord → path = ["classes","TurtleRecord"]
-    //                       /api/bmob/users/me → path = ["users","me"]
-    const pathSegments = req.query.path;
-    let proxyPath;
+    // Vercel 会在 req.query 中传入路径参数
+    // vercel.json 中配置了 rewrite: /api/bmob/(.*) → /api/bmob?path=$1
+    // 所以 req.query.path 包含原始路径的剩余部分
+    let pathParam = req.query.path || "";
+    
+    // 也尝试从 req.url 中提取路径（兼容不同 Vercel 版本）
+    if (!pathParam) {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+      let full_path = parsedUrl.pathname.replace(/^\/api\/bmob\/?/, "");
+      pathParam = full_path;
+    }
 
-    if (!pathSegments || (Array.isArray(pathSegments) && pathSegments.length === 0)) {
-      // 没有子路径 → 调试端点
+    // 如果没有路径参数，返回调试信息
+    if (!pathParam || pathParam === "") {
       return res.json({
         status: "ok",
         message: "Bmob API 代理已就绪",
-        time: new Date().toISOString()
+        time: new Date().toISOString(),
+        _debug: { url: req.url, query: req.query }
       });
     }
 
-    // 把路径段拼接成 /login 或 /classes/TurtleRecord
-    const segments = Array.isArray(pathSegments) ? pathSegments : [pathSegments];
-    proxyPath = "/" + segments.join("/");
+    // 确保路径以 / 开头
+    if (!pathParam.startsWith("/")) pathParam = "/" + pathParam;
 
-    // 重建查询字符串
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const queryString = url.search || "";
-
-    // 完整的 Bmob API 路径
-    const fullPath = queryString ? proxyPath + queryString : proxyPath;
+    // 获取查询字符串
+    const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+    const queryString = parsedUrl.search || "";
+    const fullPath = queryString ? pathParam + queryString : pathParam;
     const bmobUrl = `${BMOB_CONFIG.apiBase}${fullPath}`;
 
     console.log(`[Proxy] ${req.method} → ${bmobUrl}`);
