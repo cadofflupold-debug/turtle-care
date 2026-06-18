@@ -1,5 +1,10 @@
 {
   "rewrites": [
     { "source": "/api/bmob/:path*", "destination": "/api/bmob?path=:path*" }
-  ]
+  ],
+  "functions": {
+    "api/bmob.js": {
+      "maxDuration": 30
+    }
+  }
 }
