@@ -530,6 +530,40 @@ const speciesCatalog = [
       });
     }
 
+    // 压缩图片为 base64 data URL，用于直接存在 Bmob 记录里
+    // 目标大小：base64 字符串 < 500KB（原图约 370KB 以下）
+    async function compressImageToDataUrl(file, maxBase64Length = 500000) {
+      const image = await readFileAsImage(file);
+      const canvas = document.createElement("canvas");
+      // 头像用 800px 足够清晰了，照片日志可以适当大一点
+      const maxSide = 1024;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      let quality = 0.75;
+      let dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+      while (dataUrl.length > maxBase64Length && quality > 0.3) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL("image/jpeg", quality);
+      }
+
+      // 如果还太大，缩小尺寸
+      while (dataUrl.length > maxBase64Length && canvas.width > 200) {
+        canvas.width = Math.round(canvas.width * 0.7);
+        canvas.height = Math.round(canvas.height * 0.7);
+        const ctx2 = canvas.getContext("2d");
+        ctx2.drawImage(image, 0, 0, canvas.width, canvas.height);
+        dataUrl = canvas.toDataURL("image/jpeg", 0.5);
+      }
+
+      return dataUrl;
+    }
+
     function normalizeBmobFileResult(result, fileName) {
       const first = Array.isArray(result) ? result[0] : result;
       const url =
@@ -721,6 +755,7 @@ const speciesCatalog = [
       });
       const errors = [];
 
+      // 方案1：尝试 Bmob REST 文件上传
       if (!BMOB_APPLICATION_ID.includes("YOUR_") && !BMOB_REST_API_KEY.includes("YOUR_")) {
         try {
           return await bmobRestUploadFile(uploadFile);
@@ -730,12 +765,30 @@ const speciesCatalog = [
         }
       }
 
+      // 方案2：尝试 Bmob SDK 文件上传
       try {
         return await uploadPhotoFileBySdk(uploadFile, fileName);
       } catch (error) {
         errors.push(`SDK：${formatBmobError(error)}`);
       }
 
+      // 方案3：图片压缩为 base64 data URL，直接存在 Bmob 记录里
+      // （Bmob 文件服务需要备案域名，这是不依赖文件服务的替代方案）
+      try {
+        const dataUrl = await compressImageToDataUrl(file);
+        return {
+          url: dataUrl,
+          name: fileName,
+          size: file.size,
+          storage: "base64",
+          uploadedAt: todayDateString()
+        };
+      } catch (e) {
+        console.warn("base64 fallback failed, trying local storage", e);
+        errors.push(`base64：${e.message || e}`);
+      }
+
+      // 方案4：本地 IndexedDB/localStorage 兜底（仅当前设备可见）
       try {
         return await saveLocalPhoto(uploadFile, fileName, errors);
       } catch (error) {
@@ -1004,7 +1057,9 @@ const speciesCatalog = [
         if (fileInput) fileInput.value = "";
         setArchiveMessage(
           photo.storage === "local-indexeddb" || photo.storage === "local-storage"
-            ? "Bmob 文件服务暂不可用，头像已保存到本机浏览器并已绑定到档案。"
+            ? "Bmob 文件服务暂不可用，头像已保存到本机浏览器（仅当前设备可见）。"
+            : photo.storage === "base64"
+            ? "头像已保存（内嵌方式，所有设备可见）。"
             : "头像已更新。",
           false
         );
