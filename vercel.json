@@ -1,1 +1,1 @@
-{"version": 2, "name": "turtle-care-station", "builds": [{"src": "*.html", "use": "@vercel/static"}, {"src": "*.js", "use": "@vercel/static"}, {"src": "*.css", "use": "@vercel/static"}, {"src": "api/*.js", "use": "@vercel/node"}], "routes": [{"src": "/api/(.*)", "dest": "/api/$1"}, {"src": "/(.*)", "dest": "/$1"}]}
+{"version": 2, "name": "turtle-care-station", "rewrites": [{"source": "/api/(.*)", "destination": "/api/$1"}]}
