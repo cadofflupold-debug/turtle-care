@@ -357,7 +357,7 @@ const speciesCatalog = [
     async function initBmob() {
       // 安全模式：前端始终走 /api/bmob 代理，Bmob Key 只存在于服务端环境变量。
       try {
-        const response = await fetch(`${BMOB_API_BASE}`, { method: "GET" });
+        const response = await fetch(`${BMOB_API_BASE}?t=${Date.now()}`, { method: "GET", cache: "no-store" });
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok || data.code === "BMOB_ENV_MISSING") {
