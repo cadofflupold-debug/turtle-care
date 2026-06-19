@@ -1,0 +1,26 @@
+﻿{
+  "version": "2.0",
+  "envId": "YOUR_CLOUDBASE_ENV_ID",
+  "functions": [
+    {
+      "name": "bmob",
+      "type": "http",
+      "runtime": "Nodejs18.15",
+      "timeout": 30,
+      "memorySize": 256,
+      "handler": "index.main",
+      "installDependency": true,
+      "ignore": [
+        "node_modules",
+        ".git"
+      ],
+      "envVariables": {
+        "BMOB_APPLICATION_ID": "SET_IN_CONSOLE_OR_REPLACE_HERE",
+        "BMOB_REST_API_KEY": "SET_IN_CONSOLE_OR_REPLACE_HERE",
+        "BMOB_API_SAFE_CODE": "SET_IN_CONSOLE_OR_REPLACE_HERE",
+        "BMOB_API_BASE": "https://api.bmobcloud.com/1",
+        "BMOB_FILE_API_BASE": "https://api.bmobcloud.com/2"
+      }
+    }
+  ]
+}
