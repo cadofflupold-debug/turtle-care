@@ -52,11 +52,6 @@ const QWEATHER_API_KEY = "431f5dfc02a546fb9b880b4459314678";
     // ===== Bmob 安全配置 =====
     // 前端不保存任何 Bmob Key；所有认证头由 /api/bmob 代理在服务端注入。
     // Vercel 部署时请在 Environment Variables 中配置 BMOB_APPLICATION_ID、BMOB_REST_API_KEY、BMOB_API_SAFE_CODE。
-    const BMOB_SDK_URLS = [
-      "https://cdn.jsdelivr.net/npm/hydrogen-js-sdk/dist/Bmob-2.2.5.min.js",
-      "https://cdn.jsdelivr.net/npm/hydrogen-js-sdk@2.2.5/dist/Bmob-2.2.5.min.js",
-      "https://unpkg.com/hydrogen-js-sdk/dist/Bmob-2.2.5.min.js"
-    ];
 
     // ===== API mode =====
     // Always use /api/bmob proxy: local server.js in development, Vercel Function in production.
@@ -330,29 +325,6 @@ const speciesCatalog = [
       target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
 
-    async function ensureBmobSdkLoaded() {
-      if (window.Bmob) {
-        return true;
-      }
-
-      for (const sdkUrl of BMOB_SDK_URLS) {
-        try {
-          bmobStatus.textContent = "正在加载 Bmob";
-          bmobStatus.classList.add("warn");
-          setArchiveMessage(`正在尝试加载 Bmob SDK：${sdkUrl}`, false);
-          await loadExternalScript(sdkUrl);
-
-          if (window.Bmob) {
-            setArchiveMessage(`Bmob SDK 加载成功：${sdkUrl}`, false);
-            return true;
-          }
-        } catch (error) {
-          console.warn(error);
-        }
-      }
-
-      return false;
-    }
 
     async function initBmob() {
       // 安全模式：前端始终走 /api/bmob 代理，Bmob Key 只存在于服务端环境变量。
@@ -760,19 +732,6 @@ const speciesCatalog = [
       }
     }
 
-    async function uploadPhotoFileBySdk(file, fileName) {
-      if (typeof Bmob === "undefined" || typeof Bmob.File !== "function") {
-        throw new Error("当前 Bmob SDK 不支持文件上传。");
-      }
-
-      const bmobFile = Bmob.File(fileName, file);
-      const result = await withTimeout(
-        bmobFile.save(),
-        15000,
-        "Bmob SDK 文件上传超过 15 秒未响应。"
-      );
-      return normalizeBmobFileResult(result, fileName);
-    }
 
     async function uploadPhotoFile(file, prefix) {
       const fileName = makeSafeUploadFileName(prefix, file);
